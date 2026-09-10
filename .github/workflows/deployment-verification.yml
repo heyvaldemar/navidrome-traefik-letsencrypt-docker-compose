@@ -284,12 +284,14 @@ jobs:
         run: docker ps
 
       - name: Wait for Navidrome through Traefik
-        # /ping answers {"status":"ok","version":"…"} once the server has opened
-        # its database - the whole chain working, not merely a listening port:
-        # Traefik, the certificate, the container, and the application.
+        # /ping answers with a single "." once the server has opened its
+        # database - the whole chain working, not merely a listening port:
+        # Traefik, the certificate, the container, and the application. The
+        # match is anchored (`grep -qx`) because a bare `grep -q .` would be
+        # satisfied by any byte at all, including an error page.
         run: |
           # shellcheck disable=SC2016
-          timeout 8m bash -c 'while ! curl -sk "https://$APP_HOSTNAME/ping" | grep -q "true"; do
+          timeout 8m bash -c 'while ! curl -sk "https://$APP_HOSTNAME/ping" | grep -qx "[.]"; do
             echo "Waiting for Navidrome..."
             sleep 10
           done'
@@ -351,7 +353,7 @@ jobs:
         run: |
           docker compose -f "$DOCKER_COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" restart navidrome
           # shellcheck disable=SC2016
-          timeout 6m bash -c 'while ! curl -sk "https://$APP_HOSTNAME/ping" | grep -q "true"; do
+          timeout 6m bash -c 'while ! curl -sk "https://$APP_HOSTNAME/ping" | grep -qx "[.]"; do
             echo "Waiting for Navidrome on the restored data..."
             sleep 10
           done'

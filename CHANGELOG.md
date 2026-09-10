@@ -58,9 +58,12 @@ the fleet standard established in
 
 ### Notes
 
-- **`/ping` answers with a single `.`**, not JSON and not a word. The health
-  check matches that exactly (`grep -qx`), because a bare `grep -q .` would
-  match any byte the server happened to return, including an error page.
+- **`/ping` answers with a single `.`**, not JSON and not a word. Both the
+  health check and the CI wait loop match that exactly (`grep -qx`), because a
+  bare `grep -q .` would match any byte the server happened to return,
+  including an error page. The first draft looked for the word `true` in both
+  places; correcting only one of them left CI waiting eight minutes for a
+  string that was never going to arrive.
 - **A failing health check looks exactly like a missing route.** Traefik does
   not route to a container whose health check is red, and it logs nothing when
   it declines to. The first draft of this file probed `/ping` for the word
