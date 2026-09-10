@@ -1,0 +1,294 @@
+# Image pins live HERE, as interpolation defaults, so `git pull` (or
+# re-downloading this file) delivers the exact version combination this
+# repository has tested — no .env editing required. Setting the matching
+# variable in .env overrides the default for anyone who wants to pin
+# differently; .env itself carries only secrets and deliberate overrides.
+# CI (Trivy scans, check-pin-freshness, the ephemeral test .env) reads
+# the pins from these lines — this block is the single source of truth.
+x-images:
+  traefik: &traefik-image ${TRAEFIK_IMAGE_TAG:-traefik:${TRAEFIK_IMAGE_VERSION:-3.7@sha256:f86a2cab1b5c649070c49f883c743dd32d8485a56e3368c5f93b9e91f1e91259}}
+  navidrome: &navidrome-image ${NAVIDROME_IMAGE_TAG:-deluan/navidrome:${NAVIDROME_IMAGE_VERSION:-0.63.2@sha256:9012939114fbb1bb641b81cf96dec5ded15f0aafefe8d47a511d7cb919658e40}}
+  backups: &backups-image ${NAVIDROME_BACKUPS_IMAGE_TAG:-alpine:${NAVIDROME_BACKUPS_IMAGE_VERSION:-3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce}}
+
+networks:
+  navidrome-network:
+    external: true
+  traefik-network:
+    external: true
+
+volumes:
+  navidrome-data:
+  navidrome-data-backups:
+  traefik-certificates:
+
+services:
+  navidrome:
+    image: *navidrome-image
+    # Hardening: no privilege escalation via setuid binaries
+    security_opt:
+      - no-new-privileges:true
+    # Navidrome is a single Go binary that serves HTTP and reads files. It
+    # needs no Linux capability at all, and dropping the set outright is worth
+    # more here than changing the uid would be: the image's /data is root-owned,
+    # so a `user:` override on a named volume produces a container that cannot
+    # write its own database. See NAVIDROME_USER in .env.example for the case
+    # where that override IS right.
+    cap_drop:
+      - ALL
+    # The data directory holds a SQLite database that is written on every
+    # scrobble and every scan. Docker's default is ten seconds to SIGKILL, and
+    # a kill during a checkpoint leaves a write-ahead log to replay at best and
+    # a torn page at worst. Sixty seconds, overridable in .env.
+    stop_grace_period: ${NAVIDROME_STOP_GRACE_PERIOD:-60s}
+    # Resource limits as .env-overridable defaults (e.g. NAVIDROME_MEMORY_LIMIT=2g);
+    # the override survives every git pull. What moves these is the first full
+    # scan of a large library and on-the-fly transcoding, not steady playback.
+    deploy:
+      resources:
+        limits:
+          memory: ${NAVIDROME_MEMORY_LIMIT:-1g}
+          cpus: "${NAVIDROME_CPU_LIMIT:-2.0}"
+        reservations:
+          memory: ${NAVIDROME_MEMORY_RESERVATION:-128m}
+          cpus: "${NAVIDROME_CPU_RESERVATION:-0.2}"
+    volumes:
+      # Users, playlists, play counts, ratings, the search index and the
+      # artwork cache. Small, and the only part that cannot be rebuilt.
+      - navidrome-data:/data
+      # YOUR MUSIC. Read-only, as upstream's own documentation asks: Navidrome
+      # never writes here, and a scanner with write access to the collection is
+      # one bad release away from a very long restore.
+      - ${NAVIDROME_MUSIC_PATH:-./music}:/music:ro
+    environment:
+      TZ: ${NAVIDROME_TZ:-Etc/UTC}
+      # Every configuration option can be set as an environment variable by
+      # uppercasing it and prefixing ND_. Full list:
+      # https://www.navidrome.org/docs/usage/configuration/options/
+      ND_LOGLEVEL: ${NAVIDROME_LOG_LEVEL:-info}
+      # A cron expression, or @every 24h. The default rescans nightly rather
+      # than continuously: a full scan of a large library is the one thing that
+      # makes this container expensive.
+      ND_SCANSCHEDULE: ${NAVIDROME_SCAN_SCHEDULE:-@every 24h}
+      ND_SESSIONTIMEOUT: ${NAVIDROME_SESSION_TIMEOUT:-24h}
+      # Empty = served at the root of its own hostname, which is what this
+      # template sets up. Set it only if you put Navidrome under a path.
+      ND_BASEURL: "${NAVIDROME_BASE_URL:-}"
+      # Let clients that cannot play the source format ask for something else.
+      ND_ENABLETRANSCODINGCONFIG: ${NAVIDROME_ENABLE_TRANSCODING_CONFIG:-true}
+      # Album and artist art fetched from external services. Turning this off
+      # keeps the container from making any outbound request at all.
+      ND_ENABLEEXTERNALSERVICES: ${NAVIDROME_ENABLE_EXTERNAL_SERVICES:-true}
+    networks:
+      - navidrome-network
+      - traefik-network
+    healthcheck:
+      # /ping answers with a single "." and nothing else - not JSON, not a
+      # word. `grep -qx` requires the whole line to be exactly that, because a
+      # bare `grep -q .` would match any byte the server happened to return,
+      # including an error page.
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:4533/ping | grep -qx '[.]' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 60s
+    labels:
+      # Enable Traefik for this container
+      - "traefik.enable=true"
+      # Match incoming requests on a specific hostname
+      - "traefik.http.routers.navidrome.rule=Host(`${NAVIDROME_HOSTNAME:?set in .env - see .env.example}`)"
+      # Assign the router to a named Traefik service
+      - "traefik.http.routers.navidrome.service=navidrome"
+      # Use the 'websecure' (HTTPS) entry point
+      - "traefik.http.routers.navidrome.entrypoints=websecure"
+      # Define the internal container port for routing
+      - "traefik.http.services.navidrome.loadbalancer.server.port=4533"
+      # Enable TLS on this router
+      - "traefik.http.routers.navidrome.tls=true"
+      # Use Let's Encrypt for certificate management
+      - "traefik.http.routers.navidrome.tls.certresolver=letsencrypt"
+      # Pass the original Host header to the container
+      - "traefik.http.services.navidrome.loadbalancer.passhostheader=true"
+      # Compression, but only for the things that compress. An mp3 or a flac is
+      # already compressed: running it through gzip spends CPU on both ends to
+      # make the file marginally larger. includedContentTypes turns the
+      # middleware into an allow-list, so the web UI and the Subsonic API get
+      # it and the audio never does.
+      - "traefik.http.middlewares.navidrome-compress.compress=true"
+      - "traefik.http.middlewares.navidrome-compress.compress.includedContentTypes=text/html,text/css,text/javascript,application/javascript,application/json,application/xml,image/svg+xml"
+      # THERE IS DELIBERATELY NO BUFFERING MIDDLEWARE HERE. Traefik streams
+      # request and response bodies unless you attach one; attaching it is what
+      # turns buffering ON, and setting its limits to 0 means "no size ceiling",
+      # not "off". Measured on this stack against a response that takes four
+      # seconds to produce: without the middleware the first byte arrives in
+      # 0.03s, with an all-zero one it arrives at 4.15s - the whole track held
+      # in the proxy before playback can start. What limits a long upload is
+      # the entry point's readTimeout, which is 60s by default and is set to
+      # zero below.
+      - "traefik.http.routers.navidrome.middlewares=navidrome-compress"
+      # Specify which Docker network Traefik should use for routing
+      - "traefik.docker.network=traefik-network"
+    restart: unless-stopped
+    depends_on:
+      traefik:
+        condition: service_healthy
+
+  traefik:
+    image: *traefik-image
+    # Hardening: no privilege escalation via setuid binaries
+    security_opt:
+      - no-new-privileges:true
+    # Drop every Linux capability; add back only what this image's
+    # entrypoint needs (bind :80/:443).
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    # Resource limits as .env-overridable defaults (e.g. TRAEFIK_MEMORY_LIMIT=2g);
+    # the override survives every git pull.
+    deploy:
+      resources:
+        limits:
+          memory: ${TRAEFIK_MEMORY_LIMIT:-256m}
+          cpus: "${TRAEFIK_CPU_LIMIT:-0.5}"
+        reservations:
+          memory: ${TRAEFIK_MEMORY_RESERVATION:-64m}
+          cpus: "${TRAEFIK_CPU_RESERVATION:-0.1}"
+    command:
+      # Set the log level (DEBUG, INFO, WARN, ERROR)
+      - "--log.level=${TRAEFIK_LOG_LEVEL:-WARN}"
+      # Enable the built-in API and web-based dashboard
+      - "--api.dashboard=true"
+      # Enable the /ping endpoint so we can health-check Traefik
+      - "--ping=true"
+      # Assign the /ping endpoint to a dedicated entry point on port 8082
+      - "--ping.entrypoint=ping"
+      - "--entrypoints.ping.address=:8082"
+      # Define the primary HTTP entry point on port 80
+      - "--entrypoints.web.address=:80"
+      # Define the secure (HTTPS) entry point on port 443
+      - "--entrypoints.websecure.address=:443"
+      # HTTP -> HTTPS redirect at entrypoint level
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # A transcoded stream is one response that lasts as long as the track,
+      # and a long album played gapless is longer still. The default timeouts
+      # cut it off mid-playback.
+      - "--entrypoints.websecure.transport.respondingTimeouts.readTimeout=${NAVIDROME_STREAM_TIMEOUT:-0s}"
+      - "--entrypoints.websecure.transport.respondingTimeouts.writeTimeout=${NAVIDROME_STREAM_TIMEOUT:-0s}"
+      - "--entrypoints.websecure.transport.respondingTimeouts.idleTimeout=${NAVIDROME_IDLE_TIMEOUT:-600s}"
+      # Enable the Docker provider to detect containers and their labels
+      - "--providers.docker=true"
+      # Point Traefik to the Docker socket
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      # Prevent automatic exposure of all containers; only expose containers
+      # with "traefik.enable=true"
+      - "--providers.docker.exposedbydefault=false"
+      # Use ACME (Let's Encrypt) to generate/renew certificates via TLS challenge
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      # The email address used by Let's Encrypt for renewal notices
+      - "--certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL:?set in .env - see .env.example}"
+      # The file where ACME certificates are stored inside the container
+      - "--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json"
+      # Enable Prometheus metrics
+      - "--metrics.prometheus=true"
+      # Configure Prometheus histogram buckets
+      - "--metrics.prometheus.buckets=0.1,0.3,1.2,5.0"
+      # Check for newer Traefik versions and optionally log that info
+      - "--global.checknewversion=true"
+      # Disable sending anonymous usage data to the Traefik maintainers
+      - "--global.sendanonymoususage=false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certificates:/etc/traefik/acme
+    networks:
+      - traefik-network
+    ports:
+      - "80:80"
+      - "443:443"
+    healthcheck:
+      test: ["CMD", "wget", "http://localhost:8082/ping","--spider"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    labels:
+      # Enable Traefik for this container
+      - "traefik.enable=true"
+      # A router to expose the Traefik dashboard
+      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOSTNAME:?set in .env - see .env.example}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      # Basic Authentication for the Traefik dashboard
+      - "traefik.http.routers.dashboard.middlewares=authtraefik"
+      - "traefik.http.middlewares.authtraefik.basicauth.users=${TRAEFIK_BASIC_AUTH:?set in .env - see .env.example for htpasswd generation}"
+      # Specify the internal server port to the dashboard service
+      - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
+      # Pass the original Host header to the backend
+      - "traefik.http.services.dashboard.loadbalancer.passhostheader=true"
+    restart: unless-stopped
+
+  backups:
+    # A plain alpine: the data directory is what is worth keeping, so the loop
+    # needs tar and nothing else.
+    image: *backups-image
+    # Hardening: no privilege escalation via setuid binaries
+    security_opt:
+      - no-new-privileges:true
+    # Drop every Linux capability; add back only what this container needs to
+    # write archives it owns.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    # Resource limits as .env-overridable defaults; the override survives every
+    # git pull.
+    deploy:
+      resources:
+        limits:
+          memory: ${NAVIDROME_BACKUPS_MEMORY_LIMIT:-256m}
+          cpus: "${NAVIDROME_BACKUPS_CPU_LIMIT:-0.5}"
+        reservations:
+          memory: ${NAVIDROME_BACKUPS_MEMORY_RESERVATION:-16m}
+          cpus: "${NAVIDROME_BACKUPS_CPU_RESERVATION:-0.1}"
+    command: >-
+      sh -c 'sleep "$$BACKUP_INIT_SLEEP";
+      while true; do
+        STAMP="$$(date +%Y-%m-%d_%H-%M)";
+        DATA_FILE="$$DATA_BACKUPS_PATH/$$DATA_BACKUP_NAME-$$STAMP.tar.gz";
+        echo "[$$(date -Iseconds)] Starting data backup to $$DATA_FILE";
+        # Written to .partial and renamed only after the archive has been read
+        # back. The exit code alone cannot decide this: GNU tar reserves 1 for
+        # a file that changed mid-read and 2 for a real failure, but this is
+        # BusyBox tar, which returns 1 for both - including the is-a-directory
+        # case, where nothing was written at all. Reading it back is true on
+        # either tar and promises more than the code ever did.
+        tar -zcpf "$$DATA_FILE.partial" $$DATA_PATH; RC=$$?;
+        if { [ "$$RC" -eq 0 ] || [ "$$RC" -eq 1 ]; } && tar -tzf "$$DATA_FILE.partial" > /dev/null 2>&1; then
+          mv "$$DATA_FILE.partial" "$$DATA_FILE";
+          echo "[$$(date -Iseconds)] Data backup OK: $$DATA_FILE ($$(stat -c %s "$$DATA_FILE") bytes)$$([ "$$RC" -eq 1 ] && echo " - some files changed while being read")";
+        else
+          echo "[$$(date -Iseconds)] Data backup FAILED - partial file kept as $$DATA_FILE.failed for diagnosis" >&2;
+          mv "$$DATA_FILE.partial" "$$DATA_FILE.failed" 2>/dev/null || true;
+        fi;
+        if [ "$${DATA_BACKUP_PRUNE_DAYS:-0}" -ge 1 ]; then
+          find "$$DATA_BACKUPS_PATH" -type f -name "$$DATA_BACKUP_NAME-*" -mtime "+$$DATA_BACKUP_PRUNE_DAYS" -delete;
+        fi;
+        sleep "$$BACKUP_INTERVAL";
+      done'
+    volumes:
+      - navidrome-data:${DATA_PATH:-/data}
+      - navidrome-data-backups:${DATA_BACKUPS_PATH:-/srv/navidrome-data/backups}
+    environment:
+      BACKUP_INIT_SLEEP: ${BACKUP_INIT_SLEEP:-30m}
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-24h}
+      DATA_BACKUP_PRUNE_DAYS: ${DATA_BACKUP_PRUNE_DAYS:-7}
+      DATA_BACKUPS_PATH: ${DATA_BACKUPS_PATH:-/srv/navidrome-data/backups}
+      DATA_PATH: ${DATA_PATH:-/data}
+      DATA_BACKUP_NAME: ${DATA_BACKUP_NAME:-navidrome-data-backup}
+    networks:
+      - navidrome-network
+    restart: unless-stopped
