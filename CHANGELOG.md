@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _(no unreleased changes yet)_
 
+## [1.0.3] - 2026-09-13
+
+### Fixed
+
+- **The pre-upgrade backup this README recommended was the wrong kind.**
+  v1.0.2 told you to tar the data directory before 0.64.0. The loop does the
+  same daily, and it is a copy of a live `navidrome.db` with its `-wal` and
+  `-shm` beside it, taken by an ordinary archiver. For a daily copy that is
+  fine. For the one backup you take before a migration that rewrites every
+  table, a snapshot that was not atomic can refuse to open on the day it is the
+  only copy that matters. The README now uses `navidrome backup create`, which
+  goes through SQLite's online backup API and writes one consistent file.
+
+  It also says to check settings before the upgrade rather than after, because
+  0.64.0 validates configuration at startup and rejects negative durations, and
+  to prove the migration by comparing counts rather than by the absence of an
+  error. Both come from running this exact upgrade on a real library and
+  watching what it did.
+
 ## [1.0.2] - 2026-09-13
 
 ### Changed
@@ -115,7 +134,8 @@ the fleet standard established in
   `.env.example` carries the override file and the `chown` for people who
   bind-mount `/data` on a directory they own.
 
-[Unreleased]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/releases/tag/v1.0.3
 [1.0.2]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/releases/tag/v1.0.2
 [1.0.1]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/releases/tag/v1.0.0

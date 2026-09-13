@@ -75,16 +75,20 @@ What actually limits a long request is the entry point's `readTimeout`, which is
 
 Navidrome 0.64.0 re-encodes item ids across every table in the database. It is a **one-way** migration: a database it has touched cannot be opened by 0.63.2 again, and there is no downgrade path. This template pins 0.64.0, so a first deploy is unaffected; a deployment coming from an earlier pin is not.
 
-Take a backup you can actually restore from, and do not rely on the backup loop's next scheduled run. The default interval is 24 hours, so the newest archive can be most of a day old:
+Take a backup you can actually restore from, and take it with Navidrome's own backup command rather than with the backup loop or a copy of the files. The loop archives the live `navidrome.db` together with its `-wal` and `-shm` files using an ordinary archiver, which is fine for the daily copy and not enough here: a SQLite snapshot taken non-atomically can refuse to open on exactly the day a migration that rewrites every table has made it the only copy that matters. `navidrome backup create` goes through SQLite's online backup API and produces a single consistent file:
 
 ```bash
 docker compose -f navidrome-traefik-letsencrypt-docker-compose.yml -p navidrome \
-  exec backups sh -c 'tar -zcpf /srv/navidrome-data/backups/pre-0.64.0-manual.tar.gz /data'
+  exec navidrome navidrome backup create -d /data/pre-0.64.0
 ```
+
+Check your settings before the upgrade rather than after it. 0.64.0 validates configuration at startup: a negative duration in any `ND_*` setting is rejected, and an unknown key produces a warning. Read the first thirty lines of the log after the first start; it should carry no complaint about configuration.
 
 Then expect the first start after the upgrade to run the migration. On a large library it takes noticeably longer than a normal restart, and it must not be interrupted: `stop_grace_period` is sized for an ordinary shutdown, not for this. Let it finish before restarting anything.
 
 Clients that cache item ids, which is most offline-sync apps, need a re-sync afterwards. Nothing is lost; the ids they held simply no longer name the same rows.
+
+Prove it by state, not by the absence of an error. Compare song, album and artist counts before and after; they must match to the number. Measured on a real library across this exact migration: 249 songs, 51 albums, 115 artists and 28 annotations before, the same after, every annotation still pointing at a row that exists, and every id now 22 characters of base62.
 
 ## Supply chain trust
 
