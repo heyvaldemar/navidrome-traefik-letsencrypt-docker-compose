@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.0.1] - 2026-09-13
+
 ### Changed
 
 - **`deluan/navidrome:0.63.2` moved to `deluan/navidrome:0.64.0`.** The freshness check reported the lag; the deploy job booted the stack on the new image before this landed.
@@ -87,5 +91,6 @@ the fleet standard established in
   `.env.example` carries the override file and the `chown` for people who
   bind-mount `/data` on a directory they own.
 
-[Unreleased]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/releases/tag/v1.0.0
