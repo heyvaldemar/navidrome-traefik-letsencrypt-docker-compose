@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _(no unreleased changes yet)_
 
+## [1.0.2] - 2026-09-13
+
+### Changed
+
+- **The 0.64.0 upgrade is documented where somebody deciding to take it will
+  read it.** v1.0.1 moved the pin from 0.63.2 and said only that the freshness
+  check reported a lag. That is true and it is not enough: 0.64.0 re-encodes
+  item ids across every table in a **one-way** migration, and a database it has
+  touched cannot be opened by 0.63.2 again.
+
+  A first deploy is unaffected, which is why CI was green and stayed green: it
+  boots a fresh stack every run and never sees the migration at all. A
+  deployment coming from an earlier pin is the case that matters, and it gets a
+  section in the README now: take a backup you can restore from rather than
+  trusting the loop's next scheduled run, let the first start finish the
+  migration without interrupting it, and expect offline-sync clients to need a
+  re-sync.
+
+### Fixed
+
+- `.env.example` still named 0.63.2 in two places after the pin moved. The
+  automatic bump rewrites the compose file and the README's version line and
+  does not read that file.
+
 ## [1.0.1] - 2026-09-13
 
 ### Changed
@@ -91,6 +115,7 @@ the fleet standard established in
   `.env.example` carries the override file and the `chown` for people who
   bind-mount `/data` on a directory they own.
 
-[Unreleased]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/releases/tag/v1.0.2
 [1.0.1]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/releases/tag/v1.0.0

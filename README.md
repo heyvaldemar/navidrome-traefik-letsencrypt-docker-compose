@@ -71,6 +71,21 @@ What actually limits a long request is the entry point's `readTimeout`, which is
 
 `./update.sh` moves this checkout to the latest release tag — a combination this repository's CI has booted, upgraded from the previous release on the same volumes, and smoke-tested — and then runs `docker compose up -d`. It refuses to cross a major version unattended, refuses to run over local changes, and names any variable that became required since your version before anything has moved. `./update.sh --dry-run` says what would happen.
 
+## Upgrading across 0.64.0, which rewrites every item id
+
+Navidrome 0.64.0 re-encodes item ids across every table in the database. It is a **one-way** migration: a database it has touched cannot be opened by 0.63.2 again, and there is no downgrade path. This template pins 0.64.0, so a first deploy is unaffected; a deployment coming from an earlier pin is not.
+
+Take a backup you can actually restore from, and do not rely on the backup loop's next scheduled run. The default interval is 24 hours, so the newest archive can be most of a day old:
+
+```bash
+docker compose -f navidrome-traefik-letsencrypt-docker-compose.yml -p navidrome \
+  exec backups sh -c 'tar -zcpf /srv/navidrome-data/backups/pre-0.64.0-manual.tar.gz /data'
+```
+
+Then expect the first start after the upgrade to run the migration. On a large library it takes noticeably longer than a normal restart, and it must not be interrupted: `stop_grace_period` is sized for an ordinary shutdown, not for this. Let it finish before restarting anything.
+
+Clients that cache item ids, which is most offline-sync apps, need a re-sync afterwards. Nothing is lost; the ids they held simply no longer name the same rows.
+
 ## Supply chain trust
 
 Three images pinned to `tag@sha256:<digest>` as interpolation defaults in the compose `x-images` block:
