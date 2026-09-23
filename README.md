@@ -132,6 +132,8 @@ chmod +x ./*.sh
 ./navidrome-restore-data.sh
 ```
 
+It lists the backups and asks, or takes a file name as its argument; it reads every path from the running backups container, and CI runs it on every push.
+
 It stops the server first: the database is SQLite and is written on every scrobble and every scan. Play counts and playlists are back immediately afterwards; if tracks are missing, the archive predates them and a scan brings them in.
 
 Navidrome also has a backup command of its own, which writes into the data directory rather than out of it: `docker compose -p navidrome exec navidrome navidrome backup create`. That is a database snapshot, and this loop archives it along with everything else.
