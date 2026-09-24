@@ -104,6 +104,23 @@ Two override levels exist per image. `<PREFIX>_IMAGE_VERSION` in `.env` swaps on
 
 The daily `check-pin-freshness` CI job re-resolves each pin against its registry and compares the pinned Navidrome and Traefik versions against the latest upstream releases. GitHub Actions are pinned by commit SHA; Dependabot keeps those fresh.
 
+### Verify what you deploy
+
+Every release from v1.0.8 on carries three files made on GitHub's runner with a short-lived identity and no stored key: `navidrome-traefik-letsencrypt-docker-compose-<tag>.tar.gz`, a `git archive` of exactly the tree the tag points at; `navidrome-traefik-letsencrypt-docker-compose-<tag>.tar.gz.sigstore.json`, a keyless [Sigstore](https://www.sigstore.dev/) signature over it; and `navidrome-traefik-letsencrypt-docker-compose-<tag>.intoto.jsonl`, [SLSA](https://slsa.dev/) build provenance from the SLSA generator. To check them with nothing from this repository trusted:
+
+```bash
+cosign verify-blob navidrome-traefik-letsencrypt-docker-compose-<tag>.tar.gz \
+  --bundle navidrome-traefik-letsencrypt-docker-compose-<tag>.tar.gz.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+slsa-verifier verify-artifact navidrome-traefik-letsencrypt-docker-compose-<tag>.tar.gz \
+  --provenance-path navidrome-traefik-letsencrypt-docker-compose-<tag>.intoto.jsonl \
+  --source-uri github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose
+```
+
+Add `--source-tag <tag>` for a release published after 24 September 2026, which is signed by the run that published it. The five releases before that date were signed by a run started by hand on `main`, so their provenance names the branch, not the tag; the archive is still the tag's tree, and the signature still belongs to this repository's workflow. The workflow that makes them is [`release-assets.yml`](.github/workflows/release-assets.yml).
+
 ## Running as a non-root uid
 
 Upstream recommends running as the owner of the music library. This template does not do that by default, and the reason is worth stating rather than hiding: the image's `/data` is owned by root, so a `user:` override on a fresh **named volume** produces a container that cannot write its own database. Shipping that as a default would mean shipping a stack that does not start.
