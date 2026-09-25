@@ -1,6 +1,7 @@
 # Navidrome + Traefik + Let's Encrypt on Docker Compose
 
 [![Deployment Verification](https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/actions/workflows/deployment-verification.yml/badge.svg?branch=main)](https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/actions/workflows/deployment-verification.yml)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14859/badge)](https://www.bestpractices.dev/projects/14859)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 This repository deploys Navidrome (a self-hosted music server that speaks the Subsonic API, so every Subsonic client on every platform works with it) behind Traefik with automatic Let's Encrypt TLS, with scheduled backups of everything it knows and a companion restore script.
