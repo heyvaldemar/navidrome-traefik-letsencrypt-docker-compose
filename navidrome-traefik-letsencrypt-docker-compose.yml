@@ -7,7 +7,7 @@
 # the pins from these lines — this block is the single source of truth.
 x-images:
   traefik: &traefik-image ${TRAEFIK_IMAGE_TAG:-traefik:${TRAEFIK_IMAGE_VERSION:-3.7@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0}}
-  navidrome: &navidrome-image ${NAVIDROME_IMAGE_TAG:-deluan/navidrome:${NAVIDROME_IMAGE_VERSION:-0.64.2@sha256:38dc2727bfcfd5ede290f8ada114fc90368146f265ae4701ddddbcbe2a44ee52}}
+  navidrome: &navidrome-image ${NAVIDROME_IMAGE_TAG:-deluan/navidrome:${NAVIDROME_IMAGE_VERSION:-0.64.1@sha256:df22d661b8d0322c33754d999b567150df9e131a47ae53be71fed0154bf8cef5}}
   backups: &backups-image ${NAVIDROME_BACKUPS_IMAGE_TAG:-alpine:${NAVIDROME_BACKUPS_IMAGE_VERSION:-3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8}}
 
 networks:
