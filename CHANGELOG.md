@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.1.0] - 2026-09-26
+
 ### Added
 
 - **Traefik's timeouts also answer to the fleet-wide names.**
@@ -189,7 +193,8 @@ the fleet standard established in
   `.env.example` carries the override file and the `chown` for people who
   bind-mount `/data` on a directory they own.
 
-[Unreleased]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.9...v1.1.0
 [1.0.7]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.4...v1.0.5
