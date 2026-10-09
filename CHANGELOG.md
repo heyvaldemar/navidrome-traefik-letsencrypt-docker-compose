@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.1.3] - 2026-10-09
+
 ### Security
 
 - **`traefik:3.7` was rebuilt upstream**; the pin moved from `sha256:b588cb566045…` to `sha256:575fa15b1350…`. Same version, same tag, a rebuilt base image — the usual shape of a security fix in a base layer.
@@ -220,7 +224,8 @@ the fleet standard established in
   `.env.example` carries the override file and the `chown` for people who
   bind-mount `/data` on a directory they own.
 
-[Unreleased]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/heyvaldemar/navidrome-traefik-letsencrypt-docker-compose/compare/v1.0.9...v1.1.0
